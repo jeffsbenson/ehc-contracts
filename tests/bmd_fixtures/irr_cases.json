@@ -1,0 +1,106 @@
+{
+  "$doc": "BMD-derived input→output pairs for Newton-Raphson IRR (monthly, annualized ×12). Used by both ehc_contracts.metrics.irr and the Reporting App's R twin at ehc-board-reporting-app/Support/irr.R and the Board Auditor's independent replica in ehc-data-analysis/data_board_auditor/tests/test_auditor_bmd_parity.py. Every case specifies the cashflow sequence and the expected annualized IRR, plus per-implementation caller params when relevant. Tolerance for numeric parity is ±0.001 percentage points = 1e-5 absolute on the decimal-form IRR, tighter than the BMD's ±0.01% display tolerance per Phase 4.3 ratification 2026-04-22. Edge cases assert behavior under each on_nonconvergence mode: 'best_estimate' (Dashboard/ProjFin), 'none' (Auditor), 'raise' (R twin via safe_irr_custom tryCatch). Expected values for closed-form cases derived analytically: NPV(r) = 0 solved for monthly r, then ×12.",
+
+  "tolerance": 1e-5,
+  "tolerance_description": "Absolute tolerance in decimal form on the annualized IRR. Corresponds to ±0.001 percentage points on the rendered percent (e.g., 9.420% vs 9.421% within tolerance). Per Phase 4.3 ratification 2026-04-22.",
+
+  "cases": [
+    {
+      "name": "break_even_1_month",
+      "description": "Simplest closed-form case: -100 at t=0, +100 at t=1. NPV(r) = -100 + 100/(1+r) = 0 → r = 0 → annualized = 0.",
+      "cashflows": [-100, 100],
+      "expected_annualized_irr": 0.0
+    },
+    {
+      "name": "break_even_2_months",
+      "description": "Same break-even over 2 periods: -100 at t=0, 0 at t=1, +100 at t=2. NPV(r) = -100 + 100/(1+r)^2 = 0 → r = 0.",
+      "cashflows": [-100, 0, 100],
+      "expected_annualized_irr": 0.0
+    },
+    {
+      "name": "one_pct_monthly",
+      "description": "1% monthly return = 12% annualized. -100 at t=0, +101 at t=1 solves (1+r)=1.01 → r=0.01 → annualized = 0.12.",
+      "cashflows": [-100, 101],
+      "expected_annualized_irr": 0.12
+    },
+    {
+      "name": "ten_pct_monthly",
+      "description": "10% monthly return = 120% annualized. -100 at t=0, +110 at t=1 solves (1+r)=1.10 → r=0.10 → annualized = 1.20.",
+      "cashflows": [-100, 110],
+      "expected_annualized_irr": 1.20
+    },
+    {
+      "name": "two_period_compound_10pct",
+      "description": "10% monthly compounded over 2 periods. -100 at t=0, 0 at t=1, +121 at t=2 solves (1+r)^2 = 1.21 → r = 0.10 → annualized = 1.20.",
+      "cashflows": [-100, 0, 121],
+      "expected_annualized_irr": 1.20
+    },
+    {
+      "name": "twenty_month_compound",
+      "description": "-1000 at t=0, 0 for 18 periods, +1200 at t=19. (1+r)^19 = 1.20 → r = 1.20^(1/19) - 1 = 0.009642059404… monthly → annualized = 0.115704712848… 19th-period bullet repayment shape.",
+      "cashflows": [-1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1200],
+      "expected_annualized_irr": 0.1157047128488431
+    },
+    {
+      "name": "land_bank_shape",
+      "description": "Realistic land-banking cashflow: three periods of investment (-500, -200, -100) followed by six periods of increasing returns (50, 100, 200, 300, 400, 500). Total invested 800, total returned 1550, net 750 over 9 periods. Expected annualized IRR reference-computed at tight convergence.",
+      "cashflows": [-500, -200, -100, 50, 100, 200, 300, 400, 500],
+      "expected_annualized_irr": 1.4072363508787111
+    },
+    {
+      "name": "small_loss",
+      "description": "Cashflow that produces a small negative IRR. -100 at t=0, +99 at t=1 solves (1+r) = 0.99 → r = -0.01 → annualized = -0.12.",
+      "cashflows": [-100, 99],
+      "expected_annualized_irr": -0.12
+    },
+    {
+      "name": "breakeven_with_zeros",
+      "description": "-100 at t=0, seven months of zero, +100 at t=8. Same break-even shape as the 2-period case, exercising more iterations of the discount series. NPV(r) = -100 + 100/(1+r)^8 = 0 → r = 0 → annualized = 0.",
+      "cashflows": [-100, 0, 0, 0, 0, 0, 0, 0, 100],
+      "expected_annualized_irr": 0.0
+    }
+  ],
+
+  "edge_cases": [
+    {
+      "name": "empty_list",
+      "description": "Empty cashflows. Always returns None regardless of on_nonconvergence — the len<2 guard fires before iteration.",
+      "cashflows": [],
+      "expected_behavior": "none_always",
+      "expected_value": null
+    },
+    {
+      "name": "single_cashflow",
+      "description": "Length-1 cashflow. Always returns None — IRR is undefined on a single point.",
+      "cashflows": [-100],
+      "expected_behavior": "none_always",
+      "expected_value": null
+    },
+    {
+      "name": "all_zeros_three_months",
+      "description": "All-zero cashflow triggers the dnpv_eps path on the first iteration. 'best_estimate' returns guess × 12 = 0.01 × 12 = 0.12 (current Dashboard/ProjFin behavior, preserved for back-compat — in practice safe_irr_custom pre-filters this in R and the emitters' callers rarely see it). 'none' returns None. 'raise' raises IRRNonConvergenceError.",
+      "cashflows": [0, 0, 0],
+      "expected_behavior": "mode_dependent",
+      "expected_best_estimate": 0.12,
+      "expected_none": null,
+      "expected_raise": "IRRNonConvergenceError"
+    }
+  ],
+
+  "param_parity_cases": [
+    {
+      "name": "land_bank_python_vs_r_params",
+      "description": "Same cashflow, run with Python defaults (max_iter=1000, tol=1e-8) vs R twin defaults (max_iter=100, tol=1e-6). Both must agree within the ±1e-5 fixture tolerance — proves that the parameter difference between the emitters and the R twin is invisible at display precision.",
+      "cashflows": [-500, -200, -100, 50, 100, 200, 300, 400, 500],
+      "python_params": {"max_iter": 1000, "tol": 1e-8},
+      "r_params": {"max_iter": 100, "tol": 1e-6}
+    },
+    {
+      "name": "twenty_month_python_vs_r_params",
+      "description": "Long cashflow (20 periods) with single terminal payout. Tests that R's looser tolerance still converges to the same display value.",
+      "cashflows": [-1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1200],
+      "python_params": {"max_iter": 1000, "tol": 1e-8},
+      "r_params": {"max_iter": 100, "tol": 1e-6}
+    }
+  ]
+}

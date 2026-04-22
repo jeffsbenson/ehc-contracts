@@ -27,13 +27,16 @@ pip install git+https://github.com/jeffsbenson/ehc-contracts.git@phase-3.5-recas
 - `ehc_contracts.validators` — `validate_manifest(payload)` and `validate_sidecar(payload)` (Phase 4+).
 - `tests/bmd_fixtures/` — input→output pairs derived from the Business Math Dictionary. The independent test surface both this package AND the auditor are verified against.
 
-## Phase 3.5 scope (2026-04-22)
+## Shipped metrics
 
-One metric ships as the empirical proof that a shared package is worth the build-pipeline and cross-repo coordination cost.
+- **Phase 3.5 (2026-04-22).** `ehc_contracts.metrics.recast.identify_recast_projects(board)` — returns the set of project IDs flagged as recast in `dp_JSB_Board`. Migrated out of `ehc-board-project-financials/pipeline/compute.py`.
+- **Phase 4.1 (2026-04-22).** `ehc_contracts.metrics.pf_routing` — `classify_value_type` and `build_value_types_dict` for P/F/IGEN/INVARIANT value-type classification. Bridged to R via a twin at `ehc-board-reporting-app/Support/pf_routing.R`.
+- **Phase 4.2 (2026-04-22).** `ehc_contracts.metrics.lots_on_delay` — `compute_lot_variance` and `lots_on_delay_count` for the per-project 3-rule delay count. No R side — the metric does not exist in the Reporting App.
+- **Phase 4.3 (2026-04-22).** `ehc_contracts.metrics.irr` — `irr_newton_raphson` (Newton-Raphson IRR on monthly cashflows, annualized ×12) with caller-scoped `on_nonconvergence` policy. Bridged to R via a twin at `ehc-board-reporting-app/Support/irr.R`.
 
-- `ehc_contracts.metrics.recast.identify_recast_projects(board)` — returns the set of project IDs flagged as recast in `dp_JSB_Board`. Migrated out of `ehc-board-project-financials/pipeline/compute.py`. The auditor keeps its own copy.
+Phase 4 sub-phases still to ship: MOIC (4.4), LB Margin (4.5).
 
-Phase 4 sub-phases add: P/F routing, Lots on Delay, IRR, MOIC, LB Margin.
+The auditor keeps its own copy of every metric and is tested against the same `tests/bmd_fixtures/` pairs. If the auditor and the shared package disagree on a fixture case, the BMD is the tiebreaker.
 
 ## Context
 

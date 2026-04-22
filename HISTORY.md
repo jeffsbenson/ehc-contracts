@@ -6,6 +6,59 @@ docstring. Entries in reverse chronological order.
 
 ---
 
+## 2026-04-22 — Phase 4.3 (EHC Federation Cohesion Plan)
+
+Added `ehc_contracts.metrics.irr` — the shared Newton-Raphson IRR
+implementation emitted as fund / active / closed / builder / project
+annualized IRRs across all three emitters. One function + one
+exception + one constant:
+
+- `irr_newton_raphson(cashflows, *, guess=0.01, max_iter=1000,
+  tol=1e-8, dnpv_eps=1e-12, on_nonconvergence="best_estimate")` →
+  `float | None`. Monthly iteration, annualized ×12. The
+  `on_nonconvergence` flag is caller-scoped — `"best_estimate"` for
+  Dashboard / ProjFin (return `rate × 12`), `"none"` for the Auditor
+  (return `None`), `"raise"` for the R twin's legacy `stop()`
+  semantics via `IRRNonConvergenceError`. Same Option-C precedent as
+  Phase 4.2's TERM policy: the shared function takes no policy; the
+  caller picks the behavior that preserves its published numbers.
+- `IRRNonConvergenceError(RuntimeError)` — raised only when
+  `on_nonconvergence="raise"`. The R twin's `safe_irr_custom`
+  tryCatch converts it to `NA`.
+- `VALID_NONCONVERGENCE_MODES` — frozenset of the three valid modes
+  for caller validation.
+
+Bridged to R via a twin at `ehc-board-reporting-app/Support/irr.R` —
+same iteration, same edge-case semantics, same fixture. No
+reticulate: the Shiny deploy has no existing Python runtime and
+Newton-Raphson is a ~20-line algorithm that hasn't churned. See
+`~/Documents/GitHub/ehc-federation/decisions/phase-4-3-irr.md` for
+the full decision memo and surprises list.
+
+Fixture: `tests/bmd_fixtures/irr_cases.json` — 9 closed-form
+classified cases + 3 edge cases (mode-dependent) + 2 param-parity
+cases proving the R-legacy `max_iter=100, tol=1e-6` parameters still
+produce the same display value as the Python `max_iter=1000, tol=1e-8`
+defaults. Tolerance **±1e-5 absolute** on the decimal-form annualized
+IRR (±0.001 percentage points on the rendered percent) — tighter
+than the BMD's ±0.01% display tolerance per Jeff's Phase 4.3
+ratification.
+
+Testing:
+
+- `tests/test_irr.py`: 22/22 green. Full suite: 95/95 green.
+- `ehc-board-reporting-app/tests/test_irr.R`: 23/23 green.
+- `ehc-data-analysis/data_board_auditor/tests/test_auditor_bmd_parity.py`:
+  5/5 green (now includes `irr_parity_with_bmd_fixtures`).
+- Numerical diff at
+  `ehc-federation/diffs/phase-4-3-irr.md`: **0 mismatches across
+  1,714 IRR rows** on the 2026-04-09 V3 workbook (four funds × fund
+  / scope / per-project / per-builder × P and F), compared against
+  three pre-migration implementations (Dashboard pure-Python,
+  ProjFin numpy, Reporting App R-legacy).
+
+---
+
 ## 2026-04-22 — Phase 4.2 (EHC Federation Cohesion Plan)
 
 Added `ehc_contracts.metrics.lots_on_delay` — the shared primitive for
