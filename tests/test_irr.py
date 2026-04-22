@@ -1,15 +1,18 @@
-"""Tests for ``ehc_contracts.metrics.irr``.
+"""Tests for ``ehc_contracts.metrics.irr`` — IRR and MOIC.
 
 Fixture-driven. The Reporting App's R twin at
 ``ehc-board-reporting-app/Support/irr.R`` and the Board Auditor's
 independent replica at
 ``ehc-data-analysis/data_board_auditor/tests/test_auditor_bmd_parity.py``
-are both verified against the same fixture file.
+are both verified against the same fixture files
+(``tests/bmd_fixtures/irr_cases.json`` and
+``tests/bmd_fixtures/moic_cases.json``).
 """
 
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -18,10 +21,12 @@ from ehc_contracts.metrics.irr import (
     IRRNonConvergenceError,
     VALID_NONCONVERGENCE_MODES,
     irr_newton_raphson,
+    moic,
 )
 
 
 FIXTURE_PATH = Path(__file__).parent / "bmd_fixtures" / "irr_cases.json"
+MOIC_FIXTURE_PATH = Path(__file__).parent / "bmd_fixtures" / "moic_cases.json"
 
 
 def _load_fixture():
@@ -29,8 +34,29 @@ def _load_fixture():
         return json.load(f)
 
 
+def _load_moic_fixture():
+    with open(MOIC_FIXTURE_PATH) as f:
+        return json.load(f)
+
+
 _FIXTURE = _load_fixture()
 _TOL = _FIXTURE["tolerance"]
+
+_MOIC_FIXTURE = _load_moic_fixture()
+_MOIC_TOL = _MOIC_FIXTURE["tolerance"]
+
+
+def _coerce_cashflows(cashflows):
+    """Fixture JSON encodes NaN as the string ``"NaN"`` (since JSON has
+    no native NaN). Coerce such entries back to ``float('nan')`` so
+    tests exercise the NaN-propagation guard."""
+    out = []
+    for c in cashflows:
+        if isinstance(c, str) and c.lower() == "nan":
+            out.append(float("nan"))
+        else:
+            out.append(c)
+    return out
 
 
 # ── Closed-form classified cases ────────────────────────────────────────
@@ -143,3 +169,89 @@ def test_nan_in_cashflow_propagates_to_none():
     the guard must hold as a defense-in-depth measure."""
     result = irr_newton_raphson([-100, float("nan"), 110])
     assert result is None
+
+
+# ════════════════════════════════════════════════════════════════════════
+# MOIC — Phase 4.4 (2026-04-22)
+# ════════════════════════════════════════════════════════════════════════
+
+
+# ── Closed-form MOIC cases ──────────────────────────────────────────────
+@pytest.mark.parametrize("case", _MOIC_FIXTURE["cases"], ids=lambda c: c["name"])
+def test_moic_closed_form_case(case):
+    """Each case specifies cashflows and the expected MOIC ratio. The
+    shared function must produce a value within ±1e-9 of the expected
+    ratio."""
+    got = moic(case["cashflows"])
+    expected = case["expected_moic"]
+    assert got is not None, (
+        f"Case '{case['name']}': got None, expected {expected!r}."
+    )
+    assert abs(got - expected) <= _MOIC_TOL, (
+        f"Case '{case['name']}': got {got!r}, expected {expected!r}, "
+        f"delta {abs(got - expected)!r} exceeds tolerance {_MOIC_TOL!r}."
+    )
+
+
+# ── MOIC edge cases — assert the documented None / 0.0 behavior ─────────
+@pytest.mark.parametrize(
+    "case", _MOIC_FIXTURE["edge_cases"], ids=lambda c: c["name"]
+)
+def test_moic_edge_case(case):
+    cf = _coerce_cashflows(case["cashflows"])
+    behavior = case["expected_behavior"]
+    got = moic(cf)
+    if behavior == "none":
+        assert got is None, (
+            f"Case '{case['name']}': got {got!r}, expected None."
+        )
+    elif behavior == "zero":
+        assert got == 0.0, (
+            f"Case '{case['name']}': got {got!r}, expected 0.0."
+        )
+    elif behavior == "numeric":
+        expected = case["expected_moic"]
+        assert got is not None and abs(got - expected) <= _MOIC_TOL, (
+            f"Case '{case['name']}': got {got!r}, expected {expected!r}."
+        )
+    else:
+        raise AssertionError(
+            f"Unknown expected_behavior {behavior!r} in case '{case['name']}'."
+        )
+
+
+# ── MOIC return-type invariants ─────────────────────────────────────────
+def test_moic_accepts_iterable_not_just_list():
+    """The function accepts any iterable — tuple, numpy-like array,
+    generator — as long as it materializes into numeric cashflows."""
+    result_list = moic([-100, 110])
+    result_tuple = moic((-100, 110))
+    result_gen = moic(x for x in [-100, 110])
+    assert result_list == pytest.approx(result_tuple)
+    assert result_list == pytest.approx(result_gen)
+
+
+def test_moic_returns_float_when_defined():
+    result = moic([-100, 110])
+    assert type(result) is float
+
+
+def test_moic_empty_returns_none_type():
+    assert moic([]) is None
+
+
+def test_moic_preserves_sign_aggregation_order():
+    """MOIC does not depend on period ordering — only on the sign of
+    each element. An interleaved sequence must produce the same ratio
+    as its sorted counterpart."""
+    interleaved = [-300, 100, -200, 400, 100]
+    sorted_cf = [-300, -200, 100, 100, 400]
+    assert abs(moic(interleaved) - moic(sorted_cf)) <= _MOIC_TOL
+
+
+def test_moic_total_loss_returns_zero_not_none():
+    """Distinguish 'invested, nothing returned' (legit 0.0) from
+    'nothing invested' (None). Regression guard against the two being
+    conflated."""
+    assert moic([-100, -200]) == 0.0
+    assert moic([100, 200]) is None

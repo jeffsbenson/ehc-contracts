@@ -4,6 +4,7 @@ from ehc_contracts.metrics.irr import (
     IRRNonConvergenceError,
     VALID_NONCONVERGENCE_MODES,
     irr_newton_raphson,
+    moic,
 )
 from ehc_contracts.metrics.lots_on_delay import (
     LOT_TYPES,
@@ -32,4 +33,5 @@ __all__ = [
     "identify_recast_projects",
     "irr_newton_raphson",
     "lots_on_delay_count",
+    "moic",
 ]

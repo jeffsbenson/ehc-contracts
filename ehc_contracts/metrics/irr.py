@@ -1,51 +1,72 @@
-"""Internal Rate of Return — Newton-Raphson on monthly cashflows, annualized ×12.
+"""Internal Rate of Return and Multiple on Invested Capital.
+
+IRR is Newton-Raphson on monthly cashflows, annualized ×12 (see
+:func:`irr_newton_raphson`). MOIC is sum(positive flows) / abs(sum(
+negative flows)) on the same cashflow shape (see :func:`moic`). Both
+metrics operate on the unleveraged monthly cashflow vector and are
+used together throughout the board package — the Project Financials
+page header shows both P and F IRR plus both P and F MOIC; the
+Reporting App's comp_cflow headers do the same.
 
 Historically implemented in four places with subtle differences:
 
   * Dashboard  — ``pipeline/irr.py`` — pure Python ``math``, returns ``rate×12``
     (best estimate) on non-convergence, ``None`` on NaN/Inf, ``None`` on
-    empty/len<2.
+    empty/len<2. MOIC returns ``None`` on empty, all-zero, or when
+    ``sum(negatives) == 0``.
   * ProjFin    — ``pipeline/irr.py`` — numpy vectorized, identical return
-    semantics to Dashboard.
-  * Reporting App — ``Support/theme.R`` — ``irr_custom`` with
-    ``max_iter=100, tol=1e-6``, ``stop()`` on non-convergence or near-zero
-    derivative. Wrapped by ``safe_irr_custom`` which returns ``NA`` on
-    ``stop()``, empty, all-zero, or all-NA.
-  * Auditor    — ``recalculate_metrics.py::irr_newton`` — returns ``None``
-    on non-convergence, ``None`` on near-zero derivative (threshold 1e-14),
-    no NaN/Inf guard, no empty guard.
+    semantics to Dashboard for both IRR and MOIC.
+  * Reporting App — ``Support/theme.R`` (IRR) / ``Support/irr.R`` (post
+    Phase 4.3) — ``irr_custom`` with ``max_iter=100, tol=1e-6``,
+    ``stop()`` on non-convergence or near-zero derivative. ``safe_moic``
+    returns ``NA`` on empty, all-NA, or when ``sum(negatives) == 0``.
+    Phase 4.4 moved ``safe_moic`` out of ``theme.R`` into ``Support/
+    irr.R``.
+  * Auditor    — ``recalculate_metrics.py::irr_newton`` (IRR) /
+    ``moic_calc`` (MOIC primitive, at line 177). The auditor's MOIC has
+    no explicit empty-guard; every call site aggregates to monthly
+    totals first (``fund_irr_moic``, ``fund_moic``) and pre-filters the
+    empty case.
 
-All four compute the same math: Newton-Raphson on the monthly NPV,
-annualized by multiplying the converged monthly rate by 12. Every
-difference above is in *how they handle edge cases*, not in the core
-iteration.
+All four IRR implementations compute the same math: Newton-Raphson on
+the monthly NPV, annualized by multiplying the converged monthly rate
+by 12. Every difference is in *how they handle edge cases*, not in the
+core iteration. All four MOIC implementations compute the same math:
+``sum(c > 0) / abs(sum(c < 0))``. Differences are limited to
+empty/None/NA handling and NaN tolerance.
 
-This shared module collapses the core into one function and exposes the
-edge-case behavior via **caller-scoped flags**. This follows the
-Phase 4.2 "Option C" precedent (TERM filtering): the shared primitive
-takes no policy, the caller picks the behavior that preserves its
-published numbers.
+IRR exposes edge-case behavior via **caller-scoped flags**
+(:data:`VALID_NONCONVERGENCE_MODES`); MOIC has no flags — the math is
+non-iterative arithmetic with no mode choices. See the Phase 4.2
+"Option C" precedent: the shared primitive takes no policy unless the
+callers actually disagree on policy.
 
 **Auditor independence.** The Board Auditor does NOT import this module.
 Its ``irr_newton`` at ``ehc-data-analysis/data_board_auditor/scripts/
-recalculate_metrics.py:161`` is a second, independent implementation.
-Both are tested against the same fixture file. If they disagree on a
-fixture case, the BMD is the tiebreaker.
+recalculate_metrics.py:161`` and ``moic_calc`` at the same file line
+177 are second, independent implementations. Both are tested against
+the same fixture files. If they disagree on a fixture case, the BMD is
+the tiebreaker.
 
-**R twin.** The Reporting App calls an R twin at ``ehc-board-reporting-
-app/Support/irr.R`` that mirrors this function's iteration exactly and
-is verified against the same fixture file. No reticulate dependency.
+**R twin.** The Reporting App calls R twins at ``ehc-board-reporting-
+app/Support/irr.R`` for both IRR (:func:`irr_newton_raphson`) and MOIC
+(:func:`moic`) that mirror this module's behavior exactly and are
+verified against the same fixture files. No reticulate dependency.
 See the Phase 4.1 decision memo for the rationale on keeping rule-based
-bridges as R twins; Phase 4.3 applies the same pattern to Newton-
-Raphson because (a) the function is 20 lines, (b) the algorithm hasn't
-changed since 1669, and (c) adding reticulate to the Shiny deploy
-surface has nontrivial operational cost.
+bridges as R twins; Phase 4.3 (IRR) and Phase 4.4 (MOIC) apply the same
+pattern because (a) the functions are small, (b) the algorithms do not
+churn, and (c) adding reticulate to the Shiny deploy surface has
+nontrivial operational cost.
 
 **Authoritative spec.** EHC Business Math Dictionary (``ehc-data-analysis/
 context/EHC_Business_Math_Dictionary.xlsx``). Fixture cases in
-``tests/bmd_fixtures/irr_cases.json``. Tolerance for cross-implementation
-parity: **±0.001 percentage points** on the annualized result (i.e.,
-``1e-5`` absolute on the decimal-form IRR).
+``tests/bmd_fixtures/irr_cases.json`` and ``tests/bmd_fixtures/
+moic_cases.json``. IRR tolerance for cross-implementation parity:
+**±0.001 percentage points** on the annualized result (``1e-5``
+absolute on the decimal-form IRR). MOIC tolerance: **±1e-9 absolute**
+on the ratio — MOIC is non-iterative so the only source of
+cross-implementation drift is float-summation-order jitter between
+pure-Python and numpy paths.
 """
 
 from __future__ import annotations
@@ -185,3 +206,73 @@ def _handle_nonconvergence(rate: float, mode: str) -> float | None:
     raise IRRNonConvergenceError(
         f"IRR did not converge; last monthly rate estimate = {rate!r}"
     )
+
+
+def moic(cashflows: Iterable[float]) -> float | None:
+    """Multiple on Invested Capital.
+
+    ``MOIC = sum(c > 0) / abs(sum(c < 0))`` on the monthly unleveraged
+    cashflow vector. Non-iterative: one pass to split, one division.
+
+    Parameters
+    ----------
+    cashflows : iterable of float
+        Monthly unleveraged cashflow values. The function materializes
+        the iterable once into a list. Period indexing is irrelevant
+        to MOIC — only the sign of each element matters.
+
+    Returns
+    -------
+    float or None
+        The ratio ``sum(positives) / abs(sum(negatives))``, or ``None``
+        when the input is empty, when any cashflow is NaN, or when
+        ``sum(negatives) == 0`` (no invested capital → division by
+        zero). An all-negative input with zero positives returns
+        ``0.0`` — a legitimate total-loss MOIC, not a missing value.
+
+    Notes
+    -----
+    **Caller-agreed semantics.** Every production caller — Dashboard,
+    ProjFin, the Reporting App's ``safe_moic``, the auditor's
+    ``fund_irr_moic`` / ``fund_moic`` — aggregates to fund/project
+    monthly totals before calling MOIC. The function itself is not
+    aware of projects, funds, or segments. Pre-aggregation is the
+    caller's responsibility.
+
+    **Empty and None handling.** An empty cashflow list returns
+    ``None`` (not ``0.0``) — downstream rendering treats ``None`` /
+    ``NA`` as blank/dash, whereas ``0.0`` would falsely imply a real
+    total-loss outcome. This matches the empty-set semantics used for
+    IRR and documented in the auditor's Session Q HANDOFF.
+
+    **NaN propagation.** A NaN cashflow produces a NaN sum; the
+    function detects this and returns ``None``. Production callers
+    pre-filter NaN values via pandas / numpy — this guard is
+    defense-in-depth parity with :func:`irr_newton_raphson`'s NaN/Inf
+    handling.
+
+    **Auditor independence.** The Board Auditor's ``moic_calc`` at
+    ``ehc-data-analysis/data_board_auditor/scripts/recalculate_metrics.py:177``
+    is a second, independent implementation tested against the same
+    fixture file as this function. If the two disagree on a case, the
+    BMD is the tiebreaker.
+    """
+    cf = list(cashflows)
+    if len(cf) == 0:
+        return None
+
+    pos = 0.0
+    neg = 0.0
+    for c in cf:
+        cf_value = float(c)
+        if math.isnan(cf_value):
+            return None
+        if cf_value > 0:
+            pos += cf_value
+        elif cf_value < 0:
+            neg += cf_value
+
+    if neg == 0.0:
+        return None
+
+    return pos / abs(neg)

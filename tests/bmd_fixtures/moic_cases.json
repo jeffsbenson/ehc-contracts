@@ -1,0 +1,115 @@
+{
+  "$doc": "BMD-derived input→output pairs for Multiple on Invested Capital (MOIC). Used by ehc_contracts.metrics.moic, the Reporting App's R twin at ehc-board-reporting-app/Support/irr.R (safe_moic wraps moic), and the Board Auditor's independent replica in ehc-data-analysis/data_board_auditor/tests/test_auditor_bmd_parity.py. MOIC = sum(positive flows) / abs(sum(negative flows)) on the monthly unleveraged cashflow vector. Non-iterative arithmetic — no convergence, no iteration, no mode choices. Tolerance for numeric parity is ±1e-9 absolute on the ratio, tighter than the BMD's ±0.01x display tolerance per Phase 4.4 ratification 2026-04-22. The only source of cross-implementation drift is float-summation-order jitter between pure-Python and numpy paths; real fund cashflows produce byte-equal results across all four prior implementations.",
+
+  "tolerance": 1e-9,
+  "tolerance_description": "Absolute tolerance on the MOIC ratio. Corresponds to 1e-9 on the decimal form of the ratio — well below the BMD's 2-decimal-place display precision (0.005). Per Phase 4.4 ratification 2026-04-22. MOIC is non-iterative so this tolerance only absorbs float-pathway jitter (pure Python generator-comprehension sum vs numpy boolean-mask sum).",
+
+  "cases": [
+    {
+      "name": "break_even_1_to_1",
+      "description": "Simplest case: -100 invested, +100 returned. MOIC = 100 / 100 = 1.0 — full return of capital, no gain.",
+      "cashflows": [-100, 100],
+      "expected_moic": 1.0
+    },
+    {
+      "name": "two_x_return",
+      "description": "-100 invested, +200 returned. MOIC = 200 / 100 = 2.0 — classic 2x multiple.",
+      "cashflows": [-100, 200],
+      "expected_moic": 2.0
+    },
+    {
+      "name": "partial_loss",
+      "description": "-100 invested, +50 returned. MOIC = 50 / 100 = 0.5 — half of capital recovered.",
+      "cashflows": [-100, 50],
+      "expected_moic": 0.5
+    },
+    {
+      "name": "total_loss",
+      "description": "-100 invested, 0 returned. Positives sum to 0 but negatives are present → MOIC = 0 / 100 = 0.0. A legitimate total-loss outcome, not a missing value.",
+      "cashflows": [-100, 0],
+      "expected_moic": 0.0
+    },
+    {
+      "name": "multi_period_investment_simple_return",
+      "description": "Investment spread across three periods (-500, -200, -100) = -800 total, followed by a single +1000 return. MOIC = 1000 / 800 = 1.25.",
+      "cashflows": [-500, -200, -100, 0, 0, 1000],
+      "expected_moic": 1.25
+    },
+    {
+      "name": "land_bank_shape",
+      "description": "Realistic land-banking cashflow mirroring the IRR fixture's land_bank_shape. Three periods of investment (-500, -200, -100) = -800 total, followed by six periods of increasing returns (50, 100, 200, 300, 400, 500) = +1550 total. MOIC = 1550 / 800 = 1.9375.",
+      "cashflows": [-500, -200, -100, 50, 100, 200, 300, 400, 500],
+      "expected_moic": 1.9375
+    },
+    {
+      "name": "small_gain",
+      "description": "-100 invested, +105 returned. MOIC = 105 / 100 = 1.05 — 5% gain in total returns.",
+      "cashflows": [-100, 105],
+      "expected_moic": 1.05
+    },
+    {
+      "name": "interleaved_flows",
+      "description": "Investment and return periods interleaved: -300, +100, -200, +400, +100. Positives = 100+400+100 = 600. Negatives = -300-200 = -500 → abs = 500. MOIC = 600 / 500 = 1.2. Proves the function does not assume all negatives precede all positives.",
+      "cashflows": [-300, 100, -200, 400, 100],
+      "expected_moic": 1.2
+    },
+    {
+      "name": "single_period_return_with_intermediate_zeros",
+      "description": "-1000 at t=0, eighteen months of zeros, +1200 at t=19. MOIC = 1200 / 1000 = 1.2. Same shape as IRR's twenty_month_compound case but MOIC ignores period indexing.",
+      "cashflows": [-1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1200],
+      "expected_moic": 1.2
+    },
+    {
+      "name": "large_magnitude_realistic_fund",
+      "description": "Realistic fund-scale magnitudes. Three investment periods totaling -60,000,000 followed by two returns totaling +75,000,000. MOIC = 75,000,000 / 60,000,000 = 1.25. Proves magnitude-independence; values chosen to be exactly representable in float so the assertion holds at 1e-9 tolerance regardless of sum ordering.",
+      "cashflows": [-25000000, -20000000, -15000000, 45000000, 30000000],
+      "expected_moic": 1.25
+    }
+  ],
+
+  "edge_cases": [
+    {
+      "name": "empty_input",
+      "description": "Empty cashflow list must return None (not 0.0). Downstream rendering treats None/NA as blank/dash; 0.0 would falsely imply a real total-loss outcome. Matches the empty-set semantics used for IRR and documented in the auditor's Session Q HANDOFF.",
+      "cashflows": [],
+      "expected_behavior": "none"
+    },
+    {
+      "name": "all_zeros",
+      "description": "All-zero cashflows: positives sum to 0, negatives sum to 0. Division by zero is undefined → return None. Dashboard / ProjFin / R / Auditor all agree.",
+      "cashflows": [0, 0, 0, 0],
+      "expected_behavior": "none"
+    },
+    {
+      "name": "all_positive_no_investment",
+      "description": "All-positive cashflows: positives > 0, negatives sum to 0. Pathological — no capital was invested, so MOIC is undefined. Return None rather than a misleading infinity or spurious large number.",
+      "cashflows": [100, 200, 300],
+      "expected_behavior": "none"
+    },
+    {
+      "name": "all_negative_pure_loss",
+      "description": "All-negative cashflows: positives sum to 0, negatives < 0. Capital was invested, nothing returned. MOIC = 0 / abs(sum_neg) = 0.0 — a legitimate total-loss outcome. Distinguishes this case from the undefined-MOIC cases above.",
+      "cashflows": [-100, -200, -50],
+      "expected_behavior": "zero"
+    },
+    {
+      "name": "nan_in_cashflow_propagates_to_none",
+      "description": "A NaN cashflow propagates to a NaN sum; the function guards against this and returns None. Production callers pre-filter NaNs via pandas/numpy — this is defense-in-depth parity with IRR's NaN/Inf handling.",
+      "cashflows": [-100, "NaN", 200],
+      "expected_behavior": "none"
+    },
+    {
+      "name": "single_negative_only",
+      "description": "One-element all-negative cashflow: positives=0, negatives=-100. MOIC = 0 / 100 = 0.0. Length-1 is valid for MOIC even though it is not valid for IRR.",
+      "cashflows": [-100],
+      "expected_moic": 0.0,
+      "expected_behavior": "numeric"
+    },
+    {
+      "name": "single_positive_only",
+      "description": "One-element all-positive cashflow: positives=100, negatives=0. Division by zero → None.",
+      "cashflows": [100],
+      "expected_behavior": "none"
+    }
+  ]
+}

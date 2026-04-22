@@ -6,6 +6,50 @@ docstring. Entries in reverse chronological order.
 
 ---
 
+## 2026-04-22 — Phase 4.4 (EHC Federation Cohesion Plan)
+
+Added `ehc_contracts.metrics.moic` — the shared Multiple on Invested
+Capital implementation emitted as fund / active / closed / builder /
+project MOICs across all three emitters. One function, no flags:
+
+- `moic(cashflows)` → `float | None`. Returns
+  `sum(c > 0) / abs(sum(c < 0))`, or `None` on empty input / division
+  by zero / any NaN. Total-loss cashflows (positives=0 with negatives
+  present) return `0.0` — a legitimate outcome, not a missing value.
+- Lives alongside `irr_newton_raphson` in
+  `ehc_contracts/metrics/irr.py`. The two metrics share the same
+  monthly unleveraged cashflow shape and are reported together in
+  every emitter — one module, one fixture-directory pair.
+
+No caller-scoped flags. Unlike IRR's Option C policy flag, MOIC's
+four pre-migration implementations (Dashboard / ProjFin / R
+`safe_moic` / Auditor `moic_calc`) agreed on every edge case once
+None↔NA is mapped. The shared function adopts that unanimous contract
+directly. See the federation decision memo at
+`~/Documents/GitHub/ehc-federation/decisions/phase-4-4-moic.md` for
+the full comparison table.
+
+Fixture coverage: 10 closed-form classified cases + 7 edge cases in
+`tests/bmd_fixtures/moic_cases.json`. The `test_irr.py` suite gained
+22 new cases, bringing the file total to 44 (22 IRR + 22 MOIC). Full
+`ehc-contracts` suite: 117/117 green. Auditor parity: 6/6 green (the
+auditor's own `moic_calc` at `recalculate_metrics.py:177` is the
+independent second implementation verified against the same fixture).
+
+R twin: added `moic(cashflows)` and `safe_moic(unlev_cashflows)` to
+`ehc-board-reporting-app/Support/irr.R`; the legacy `safe_moic`
+migrated out of `Support/theme.R` as a thin wrapper preserving the
+NA-aware `na.rm = TRUE` semantics that `build_report_specs.R` (SACRED)
+relies on. R test suite extended: 45/45 green.
+
+Numerical diff: zero drift across 1,714 MOIC rows on the 2026-04-09
+V3 workbook (730 EHF2 + 856 TPG AG 3 + 106 TPG AG SD + 22 TPG EHC E)
+comparing all four pre-migration implementations against the new
+shared module at ±1e-9 absolute tolerance. MOIC is non-iterative
+arithmetic — byte-equality was the expected outcome.
+
+---
+
 ## 2026-04-22 — Phase 4.3 (EHC Federation Cohesion Plan)
 
 Added `ehc_contracts.metrics.irr` — the shared Newton-Raphson IRR
