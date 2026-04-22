@@ -6,6 +6,61 @@ docstring. Entries in reverse chronological order.
 
 ---
 
+## 2026-04-22 — Phase 4.5 (EHC Federation Cohesion Plan)
+
+Added `ehc_contracts.metrics.lb_margin` — the shared Land Bank Margin
+primitive, covering the two CashFlow-sum formulas that are genuinely
+duplicated across emitters (Formula 1 — 9-col Rule 1; Formula 2 —
+7-col per Jeff's A1 ruling for origination_detail). Three exports:
+
+- `FLOW_COLS` — frozen tuple of 9 qs_CashFlow column names. The
+  canonical Rule 1 definition (includes Plat_Fee, Cost_Hiatus, TrueUp).
+- `LB_MARGIN_COLS` — frozen tuple of 7 column names. Excludes
+  Plat_Fee and Cost_Hiatus per the origination_detail investment-case
+  discipline. Preserves the auditor's existing ordering (Other_SU
+  before TrueUp) to avoid churn on any list-equality surface.
+- `lb_margin(rows, cols=FLOW_COLS) -> float` — sums specified columns
+  across monthly cashflow rows. Accepts any Mapping (dict, Series).
+  Empty rows return 0.0 (sum semantics, not None semantics — unlike
+  IRR/MOIC). NaN/None/missing keys contribute 0 (defense in depth).
+
+Lives alongside IRR/MOIC in `ehc_contracts/metrics/` as a sibling
+module. The primary value is the canonical column constants — every
+caller imports the same list from one place. Pandas-rich callers use
+`df[list(FLOW_COLS)].sum().sum()`; dict-row callers use the function.
+
+**Scope deliberately limited.** LB Margin has FIVE distinct formulas
+across the federation; Phase 4.5 migrates only the two column-sum
+formulas. The three hybrid formulas (Dashboard Investment Summary,
+Dashboard Reforecast Margin, Reporting App per-project fund-to-date)
+are intentionally distinct metrics that share a name. See the
+federation decision memo at
+`~/Documents/GitHub/ehc-federation/decisions/phase-4-5-lb-margin.md`
+for the full five-way comparison.
+
+Fixture coverage: 10 closed-form + 5 edge cases in
+`tests/bmd_fixtures/lb_margin_cases.json`. The test_lb_margin.py
+suite has 26 cases; full `ehc-contracts` suite: 143/143 green (+26
+new LB Margin tests). Auditor parity: 7/7 green.
+
+Numerical diff: **0 mismatches across 2,530 LB Margin rows** on the
+2026-04-09 V3 workbook (4 funds × fund/segment/per-project/per-builder
+× P/F × 9-col and 7-col variants) comparing three pre-migration
+implementations (Dashboard local FLOW_COLS, Auditor 9-col, Auditor
+7-col) against the new shared module at ±1e-6 absolute tolerance.
+LB Margin is non-iterative arithmetic — byte-equality was the expected
+outcome.
+
+No R twin. LB Margin R-side uses Formula 5 (cumulative-through-per_end
+hybrid in data_prep.R LOCKED) which is a different formula; Formula 1
+does not exist R-side.
+
+BACKLOG 4.1.1 step 1 closed: R-side `LB_Margin = "P"` override
+hoisted out of the totals loop in emit_manifest.R to a file-scope
+constant (`.DERIVED_TYPE_OVERRIDES`). Steps 2 and 3 remain open.
+
+---
+
 ## 2026-04-22 — Phase 4.4 (EHC Federation Cohesion Plan)
 
 Added `ehc_contracts.metrics.moic` — the shared Multiple on Invested

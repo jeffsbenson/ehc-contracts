@@ -1,0 +1,171 @@
+{
+  "$doc": "BMD-derived input→output pairs for LB Margin — the sum of specified qs_CashFlow columns across monthly rows. Used by ehc_contracts.metrics.lb_margin and the Board Auditor's independent replicas at recalculate_metrics.py (sum_metric_by_segment:201, sum_metric_grouped:238, recompute_ratios:309, compute_report_row_values:2954). Formula 1 uses FLOW_COLS (9-col, includes Plat_Fee + Cost_Hiatus); Formula 2 uses LB_MARGIN_COLS (7-col, excludes Plat_Fee + Cost_Hiatus, per Jeff's A1 ruling for origination_detail). P vs F is determined by which cashflow table the caller passes in — the formulas themselves are type-agnostic. Tolerance: ±1e-6 absolute on the total dollar amount. Phase 4.5 ratification 2026-04-22.",
+
+  "tolerance": 1e-6,
+  "tolerance_description": "Absolute tolerance on the LB Margin total in dollars. 1e-6 well below the BMD's ±$1 display tolerance and absorbs float-summation-order jitter across implementations. Per Phase 4.5 ratification 2026-04-22.",
+
+  "flow_cols": [
+    "mnth_Gross_Revenue",
+    "mnth_Cost_Land",
+    "mnth_Cost_Site",
+    "mnth_Cost_MUD",
+    "mnth_Cost_Carry",
+    "mnth_Plat_Fee",
+    "mnth_Cost_Hiatus",
+    "mnth_TrueUp",
+    "mnth_Other_SU"
+  ],
+
+  "lb_margin_cols": [
+    "mnth_Gross_Revenue",
+    "mnth_Cost_Land",
+    "mnth_Cost_Site",
+    "mnth_Cost_MUD",
+    "mnth_Cost_Carry",
+    "mnth_Other_SU",
+    "mnth_TrueUp"
+  ],
+
+  "cases": [
+    {
+      "name": "simple_single_row_flow",
+      "description": "Single month with revenue 1000 and all other columns zero. 9-col formula sums to 1000.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 1000, "mnth_Cost_Land": 0, "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 1000.0
+    },
+    {
+      "name": "single_row_full_9col",
+      "description": "Single month with every 9-col field nonzero. Revenue 1000, costs -600 total, Plat_Fee 50, Cost_Hiatus 25, TrueUp 10, Other_SU 5. Margin = 1000 - 600 + 50 + 25 + 10 + 5 = 490.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 1000, "mnth_Cost_Land": -200, "mnth_Cost_Site": -150, "mnth_Cost_MUD": -100, "mnth_Cost_Carry": -150, "mnth_Plat_Fee": 50, "mnth_Cost_Hiatus": 25, "mnth_TrueUp": 10, "mnth_Other_SU": 5}
+      ],
+      "expected_margin": 490.0
+    },
+    {
+      "name": "single_row_7col_excludes_plat_hiatus",
+      "description": "Same single row as above but using 7-col formula — Plat_Fee (50) and Cost_Hiatus (25) are excluded. Margin = 1000 - 600 + 10 + 5 = 415.",
+      "cols": "LB_MARGIN_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 1000, "mnth_Cost_Land": -200, "mnth_Cost_Site": -150, "mnth_Cost_MUD": -100, "mnth_Cost_Carry": -150, "mnth_Plat_Fee": 50, "mnth_Cost_Hiatus": 25, "mnth_TrueUp": 10, "mnth_Other_SU": 5}
+      ],
+      "expected_margin": 415.0
+    },
+    {
+      "name": "multi_row_9col",
+      "description": "Three months of cashflow. 9-col sum across all rows and columns. Revenue: 500+700+300 = 1500. Cost: -100-200-150 total per month = -450 each × 3 = -1350. Fees across all months: 30. Margin = 1500 - 1350 + 30 = 180.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 500, "mnth_Cost_Land": -100, "mnth_Cost_Site": -100, "mnth_Cost_MUD": -100, "mnth_Cost_Carry": -150, "mnth_Plat_Fee": 10, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0},
+        {"mnth_Gross_Revenue": 700, "mnth_Cost_Land": -200, "mnth_Cost_Site": -100, "mnth_Cost_MUD": -100, "mnth_Cost_Carry": -50, "mnth_Plat_Fee": 10, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0},
+        {"mnth_Gross_Revenue": 300, "mnth_Cost_Land": -150, "mnth_Cost_Site": -100, "mnth_Cost_MUD": -100, "mnth_Cost_Carry": -100, "mnth_Plat_Fee": 10, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 180.0
+    },
+    {
+      "name": "plat_hiatus_divergence",
+      "description": "A row where Plat_Fee (100) and Cost_Hiatus (50) are material but all other columns are zero. Proves 9-col and 7-col produce different numbers on the SAME input: 9-col = 150, 7-col = 0. This is the one case that exists solely to exercise the column-set divergence.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 0, "mnth_Cost_Land": 0, "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 100, "mnth_Cost_Hiatus": 50, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 150.0
+    },
+    {
+      "name": "plat_hiatus_divergence_7col",
+      "description": "Same row as plat_hiatus_divergence but 7-col. Plat_Fee and Cost_Hiatus excluded — result is 0.",
+      "cols": "LB_MARGIN_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 0, "mnth_Cost_Land": 0, "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 100, "mnth_Cost_Hiatus": 50, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 0.0
+    },
+    {
+      "name": "total_loss",
+      "description": "Costs only, no revenue. All four cost columns -500 across two rows, no fees. 9-col: 2 × (-2000) = -4000. Margin is negative (realistic for early-project months). Proves sign discipline holds.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 0, "mnth_Cost_Land": -500, "mnth_Cost_Site": -500, "mnth_Cost_MUD": -500, "mnth_Cost_Carry": -500, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0},
+        {"mnth_Gross_Revenue": 0, "mnth_Cost_Land": -500, "mnth_Cost_Site": -500, "mnth_Cost_MUD": -500, "mnth_Cost_Carry": -500, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": -4000.0
+    },
+    {
+      "name": "large_fund_magnitude",
+      "description": "Realistic fund-scale magnitudes. One month of fund-total: Revenue +25M, costs -18M, Plat_Fee +500k, Cost_Hiatus +250k, TrueUp +100k, Other_SU +75k. 9-col margin = 7.925M.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 25000000, "mnth_Cost_Land": -5000000, "mnth_Cost_Site": -6000000, "mnth_Cost_MUD": -3000000, "mnth_Cost_Carry": -4000000, "mnth_Plat_Fee": 500000, "mnth_Cost_Hiatus": 250000, "mnth_TrueUp": 100000, "mnth_Other_SU": 75000}
+      ],
+      "expected_margin": 7925000.0
+    },
+    {
+      "name": "trueup_positive_and_negative",
+      "description": "TrueUp column can be positive or negative. Two rows: first has +200 TrueUp, second has -300 TrueUp. Net TrueUp contribution is -100. Revenue and costs net to +500. 9-col margin = 400.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 1000, "mnth_Cost_Land": -400, "mnth_Cost_Site": -100, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 200, "mnth_Other_SU": 0},
+        {"mnth_Gross_Revenue": 0, "mnth_Cost_Land": 0, "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": -300, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 400.0
+    },
+    {
+      "name": "trueup_included_in_both",
+      "description": "TrueUp IS included in both FLOW_COLS and LB_MARGIN_COLS. This case uses both column sets to assert that TrueUp -50 shows up in both. Revenue 500, costs 0, TrueUp -50. 9-col = 450, 7-col = 450.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 500, "mnth_Cost_Land": 0, "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": -50, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 450.0
+    }
+  ],
+
+  "edge_cases": [
+    {
+      "name": "empty_rows",
+      "description": "Empty rows iterable returns 0.0 — sum semantics, not None semantics. Distinct from IRR/MOIC which return None on empty because a ratio is undefined; LB Margin is a sum and an empty sum is exactly 0.",
+      "cols": "FLOW_COLS",
+      "rows": [],
+      "expected_margin": 0.0
+    },
+    {
+      "name": "missing_columns_treated_as_zero",
+      "description": "Rows with some 9-col keys missing entirely. Missing keys contribute 0. Revenue 1000, no other columns present. Margin = 1000.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 1000}
+      ],
+      "expected_margin": 1000.0
+    },
+    {
+      "name": "none_values_treated_as_zero",
+      "description": "Rows with None/NA values in some columns. None contributes 0. Revenue 1000, Cost_Land None, rest 0. Margin = 1000.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 1000, "mnth_Cost_Land": null, "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 1000.0
+    },
+    {
+      "name": "nan_treated_as_zero",
+      "description": "Rows with NaN values. NaN contributes 0 (defense in depth — production callers pre-filter). Revenue 1000, Cost_Land NaN, rest 0. Margin = 1000.",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 1000, "mnth_Cost_Land": "NaN", "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 1000.0
+    },
+    {
+      "name": "single_row_all_zeros",
+      "description": "Single row with all 9-col keys set to 0. Margin = 0.0 (legitimate zero, not missing).",
+      "cols": "FLOW_COLS",
+      "rows": [
+        {"mnth_Gross_Revenue": 0, "mnth_Cost_Land": 0, "mnth_Cost_Site": 0, "mnth_Cost_MUD": 0, "mnth_Cost_Carry": 0, "mnth_Plat_Fee": 0, "mnth_Cost_Hiatus": 0, "mnth_TrueUp": 0, "mnth_Other_SU": 0}
+      ],
+      "expected_margin": 0.0
+    }
+  ]
+}

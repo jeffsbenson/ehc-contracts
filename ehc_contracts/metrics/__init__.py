@@ -6,6 +6,11 @@ from ehc_contracts.metrics.irr import (
     irr_newton_raphson,
     moic,
 )
+from ehc_contracts.metrics.lb_margin import (
+    FLOW_COLS,
+    LB_MARGIN_COLS,
+    lb_margin,
+)
 from ehc_contracts.metrics.lots_on_delay import (
     LOT_TYPES,
     MNTH_LOT_COLS,
@@ -21,7 +26,9 @@ from ehc_contracts.metrics.pf_routing import (
 from ehc_contracts.metrics.recast import identify_recast_projects
 
 __all__ = [
+    "FLOW_COLS",
     "IRRNonConvergenceError",
+    "LB_MARGIN_COLS",
     "LOT_TYPES",
     "MNTH_LOT_COLS",
     "UnclassifiedMetricError",
@@ -32,6 +39,7 @@ __all__ = [
     "compute_lot_variance",
     "identify_recast_projects",
     "irr_newton_raphson",
+    "lb_margin",
     "lots_on_delay_count",
     "moic",
 ]

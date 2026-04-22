@@ -34,8 +34,9 @@ pip install git+https://github.com/jeffsbenson/ehc-contracts.git@phase-3.5-recas
 - **Phase 4.2 (2026-04-22).** `ehc_contracts.metrics.lots_on_delay` — `compute_lot_variance` and `lots_on_delay_count` for the per-project 3-rule delay count. No R side — the metric does not exist in the Reporting App.
 - **Phase 4.3 (2026-04-22).** `ehc_contracts.metrics.irr` — `irr_newton_raphson` (Newton-Raphson IRR on monthly cashflows, annualized ×12) with caller-scoped `on_nonconvergence` policy. Bridged to R via a twin at `ehc-board-reporting-app/Support/irr.R`.
 - **Phase 4.4 (2026-04-22).** `ehc_contracts.metrics.irr` — `moic` (Multiple on Invested Capital: `sum(c > 0) / abs(sum(c < 0))`) as a single-signature, flag-free function in the same module as IRR. Bridged to R via a twin in the same `Support/irr.R` file; `safe_moic` preserved as a thin wrapper for the SACRED `build_report_specs.R` callers.
+- **Phase 4.5 (2026-04-22).** `ehc_contracts.metrics.lb_margin` — canonical column constants `FLOW_COLS` (9-col, Rule 1) and `LB_MARGIN_COLS` (7-col, Jeff's A1-ruling for origination_detail) plus `lb_margin(rows, cols=FLOW_COLS)` function. Scope: Formulas 1 and 2 (column-sum primitives). Three hybrid formulas in emitters (Dashboard Investment Summary, Dashboard Reforecast Margin, Reporting App fund-to-date per-project) are intentionally distinct metrics and preserved in-place. No R twin — R-side uses Formula 5 which is its own metric. Closes BACKLOG 4.1.1 step 1 (R-side `LB_Margin = "P"` override hoisted globally).
 
-Phase 4 sub-phases still to ship: LB Margin (4.5).
+Phase 4 complete.
 
 The auditor keeps its own copy of every metric and is tested against the same `tests/bmd_fixtures/` pairs. If the auditor and the shared package disagree on a fixture case, the BMD is the tiebreaker.
 
