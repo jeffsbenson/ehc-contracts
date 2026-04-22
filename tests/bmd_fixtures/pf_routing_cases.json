@@ -1,0 +1,141 @@
+{
+  "$doc": "BMD-derived input→output pairs for the P/F value-type routing metric. Used by both ehc_contracts.metrics.pf_routing.classify_value_type and by the Board Auditor's independent routing in ehc-data-analysis/data_board_auditor/scripts/manifest_loader.py (_apply_type_routing, _PROJFIN_TYPE_SUFFIX_MAP, and the prefix logic in _resolve_totals_recalc_key). If both pass against this file, they agree on what {P, F, IGEN, INVARIANT} means for each metric name.",
+  "cases": [
+    {
+      "name": "p_pattern_prof",
+      "description": "Reporting App comp_cflow totals column — P-type by ^mnth_Prof_ prefix.",
+      "metric_name": "mnth_Prof_Sources",
+      "overrides": null,
+      "default": null,
+      "expected_tag": "P"
+    },
+    {
+      "name": "p_pattern_pro_typo",
+      "description": "mnth_Pro_Unlev is the one ProjFin-originated comp_cflow column whose prefix is truncated to Pro_ (not Prof_) in the manifest. The R regex is '^mnth_Prof_|^mnth_Pro_' — the shared module matches both via ^mnth_Pro[f]?_.",
+      "metric_name": "mnth_Pro_Unlev",
+      "overrides": null,
+      "default": null,
+      "expected_tag": "P"
+    },
+    {
+      "name": "f_pattern_act",
+      "description": "Reporting App comp_cflow totals column — F-type by ^mnth_Act_ prefix.",
+      "metric_name": "mnth_Act_Cost",
+      "overrides": null,
+      "default": null,
+      "expected_tag": "F"
+    },
+    {
+      "name": "f_pattern_act_trueup",
+      "description": "Only-on-F column — F-type TrueUp. Confirms prefix handles the full mnth_Act_* family, not just common subset.",
+      "metric_name": "mnth_Act_TrueUp",
+      "overrides": null,
+      "default": null,
+      "expected_tag": "F"
+    },
+    {
+      "name": "override_wins_over_pattern",
+      "description": "Caller override wins even when a pattern would match. Overrides are the explicit tool for edge cases and must not be bypassed.",
+      "metric_name": "mnth_Prof_Sources",
+      "overrides": {"mnth_Prof_Sources": "F"},
+      "default": null,
+      "expected_tag": "F"
+    },
+    {
+      "name": "override_wins_no_pattern",
+      "description": "LB_Margin has no pattern match (prefix is capitalized, not mnth_*) — caller override 'P' is respected. This is the production R-side derived_type_overrides entry for origination_detail. See manifest_loader.py:345-349 for the auditor's compensating override.",
+      "metric_name": "LB_Margin",
+      "overrides": {"LB_Margin": "P"},
+      "default": null,
+      "expected_tag": "P"
+    },
+    {
+      "name": "default_when_no_pattern",
+      "description": "No override, no pattern match — default returned. The R totals loop passes default='INVARIANT' so most totals columns (Lots_Total, Cost_Land, Gross_Revenue) end up INVARIANT this way, matching pre-migration behavior.",
+      "metric_name": "Lots_Total",
+      "overrides": null,
+      "default": "INVARIANT",
+      "expected_tag": "INVARIANT"
+    },
+    {
+      "name": "pattern_wins_over_default",
+      "description": "Pattern takes precedence over default — prevents a caller from accidentally masking a P/F-typed column by passing default='INVARIANT'. The R totals loop relies on this precedence.",
+      "metric_name": "mnth_Act_Opt",
+      "overrides": null,
+      "default": "INVARIANT",
+      "expected_tag": "F"
+    },
+    {
+      "name": "dashboard_hand_curated_p",
+      "description": "Dashboard's 'moic_p_total' is P (hand-curated in pipeline/compute.py:324). Override-only — the shared module has no pattern for 'moic_p_*' and will not; Python emitters carry their own vocabulary via overrides.",
+      "metric_name": "moic_p_total",
+      "overrides": {"moic_p_total": "P"},
+      "default": null,
+      "expected_tag": "P"
+    },
+    {
+      "name": "dashboard_hand_curated_f",
+      "description": "Dashboard's 'irr_active' is F by convention (pipeline/compute.py:320).",
+      "metric_name": "irr_active",
+      "overrides": {"irr_active": "F"},
+      "default": null,
+      "expected_tag": "F"
+    },
+    {
+      "name": "dashboard_invariant",
+      "description": "Dashboard's 'watchlist_count' is INVARIANT — derived from dp_JSB_Board, independent of P/F (pipeline/compute.py:345).",
+      "metric_name": "watchlist_count",
+      "overrides": {"watchlist_count": "INVARIANT"},
+      "default": null,
+      "expected_tag": "INVARIANT"
+    },
+    {
+      "name": "projfin_igen",
+      "description": "ProjFin's total_lots is IGEN (type-invariant project attribute — pipeline/compute.py:412). Override-only.",
+      "metric_name": "total_lots",
+      "overrides": {"total_lots": "IGEN"},
+      "default": null,
+      "expected_tag": "IGEN"
+    },
+    {
+      "name": "projfin_invariant",
+      "description": "ProjFin's opt_fee_cap is INVARIANT — constant, not from V3 (pipeline/compute.py:451).",
+      "metric_name": "opt_fee_cap",
+      "overrides": {"opt_fee_cap": "INVARIANT"},
+      "default": null,
+      "expected_tag": "INVARIANT"
+    },
+    {
+      "name": "projfin_dot_path_p",
+      "description": "ProjFin emits dot-path nested keys (pipeline/compute.py:427). The shared module treats dot-path names as opaque strings — no special parsing. cf_grand_total.p_sources → P via override.",
+      "metric_name": "cf_grand_total.p_sources",
+      "overrides": {"cf_grand_total.p_sources": "P"},
+      "default": null,
+      "expected_tag": "P"
+    },
+    {
+      "name": "projfin_dot_path_f",
+      "description": "cf_grand_total.f_sources → F via override (pipeline/compute.py:431).",
+      "metric_name": "cf_grand_total.f_sources",
+      "overrides": {"cf_grand_total.f_sources": "F"},
+      "default": null,
+      "expected_tag": "F"
+    }
+  ],
+  "unclassified_cases": [
+    {
+      "name": "unknown_no_override_no_default",
+      "description": "A metric with no override, no pattern match, and no default must raise UnclassifiedMetricError. This is the fail-loud guard that catches newly-added metrics missing from the emitter's override map.",
+      "metric_name": "weird_new_metric",
+      "overrides": null,
+      "default": null
+    },
+    {
+      "name": "unknown_with_partial_overrides",
+      "description": "Overrides dict is present but doesn't include this name. Must raise — no silent miss.",
+      "metric_name": "another_weird_metric",
+      "overrides": {"some_other_key": "F"},
+      "default": null
+    }
+  ]
+}
