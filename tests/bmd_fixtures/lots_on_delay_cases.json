@@ -1,0 +1,165 @@
+{
+  "$doc": "BMD-derived input→output pairs for the Lots on Delay metric. Used by both ehc_contracts.metrics.lots_on_delay and by the Board Auditor's independent replica in ehc-data-analysis/data_board_auditor/tests/test_auditor_bmd_parity.py. Each case provides per-lot-type P and F aggregates (what the emitters produce after their Julian_Date filter) plus ph_lots (current-month qs_Plat_Hiatus.Lots sum). Expected outputs are (is_behind, abs_neg_variance) from compute_lot_variance and the per-project int from lots_on_delay_count.",
+
+  "cases": [
+    {
+      "name": "zero_variance_not_behind",
+      "description": "All lot types match P exactly. Not behind, zero delay lots. Rule 3.",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5, "mnth_C_Lots": 0, "mnth_D_Lots": 0, "mnth_E_Lots": 0, "mnth_F_Lots": 0, "mnth_G_Lots": 0},
+      "f_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5, "mnth_C_Lots": 0, "mnth_D_Lots": 0, "mnth_E_Lots": 0, "mnth_F_Lots": 0, "mnth_G_Lots": 0},
+      "ph_lots": 0,
+      "expected_is_behind": false,
+      "expected_abs_neg_variance": 0.0,
+      "expected_lots_on_delay": 0
+    },
+    {
+      "name": "accelerated_only_not_behind",
+      "description": "Every lot type is ahead of schedule. Not behind — positive variance never counts as delayed. Rule 3.",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5},
+      "f_lot_sums": {"mnth_A_Lots": 12, "mnth_B_Lots": 8},
+      "ph_lots": 0,
+      "expected_is_behind": false,
+      "expected_abs_neg_variance": 0.0,
+      "expected_lots_on_delay": 0
+    },
+    {
+      "name": "one_lot_type_behind_no_ph",
+      "description": "Behind on one lot type, no plat/hiatus activity. Rule 2 — return abs(variance).",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5},
+      "f_lot_sums": {"mnth_A_Lots": 7, "mnth_B_Lots": 5},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 3.0,
+      "expected_lots_on_delay": 3
+    },
+    {
+      "name": "one_lot_type_behind_with_ph",
+      "description": "Behind on one lot type, plat/hiatus activity present. Rule 1 — ph_lots wins even if smaller than variance.",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5},
+      "f_lot_sums": {"mnth_A_Lots": 7, "mnth_B_Lots": 5},
+      "ph_lots": 2,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 3.0,
+      "expected_lots_on_delay": 2
+    },
+    {
+      "name": "behind_with_ph_larger_than_variance",
+      "description": "Behind on one lot type by 1, plat/hiatus reports 5 lots. Rule 1 — ph_lots wins and the number can exceed the variance (plat/hiatus measures the contractual delay, not the cumulative miss).",
+      "p_lot_sums": {"mnth_A_Lots": 10},
+      "f_lot_sums": {"mnth_A_Lots": 9},
+      "ph_lots": 5,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 1.0,
+      "expected_lots_on_delay": 5
+    },
+    {
+      "name": "multiple_lot_types_behind",
+      "description": "Behind on three lot types simultaneously — variance sums as absolute negatives.",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5, "mnth_C_Lots": 8, "mnth_D_Lots": 0},
+      "f_lot_sums": {"mnth_A_Lots": 7, "mnth_B_Lots": 3, "mnth_C_Lots": 6, "mnth_D_Lots": 0},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 7.0,
+      "expected_lots_on_delay": 7
+    },
+    {
+      "name": "mixed_positive_and_negative_net_zero",
+      "description": "Behind on one lot type by 3, ahead on another by 3. Net total variance is zero but lot-type-level rule says BEHIND — abs_neg_variance = 3 only (positive variance excluded). This is the subtle case where summing lot-type variances before taking abs produces the wrong answer.",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5},
+      "f_lot_sums": {"mnth_A_Lots": 7, "mnth_B_Lots": 8},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 3.0,
+      "expected_lots_on_delay": 3
+    },
+    {
+      "name": "mixed_positive_and_negative_net_negative",
+      "description": "Behind on one lot type by 4, ahead on another by 1. Behind; abs_neg_variance = 4.",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": 5},
+      "f_lot_sums": {"mnth_A_Lots": 6, "mnth_B_Lots": 6},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 4.0,
+      "expected_lots_on_delay": 4
+    },
+    {
+      "name": "fractional_ph_lots_rounds_to_nearest",
+      "description": "ph_lots = 2.5 rounds to 2 (banker's rounding in Python's round()). Rule 1 applies; verify int(round(...)) is used, not int(...) or math.floor.",
+      "p_lot_sums": {"mnth_A_Lots": 10},
+      "f_lot_sums": {"mnth_A_Lots": 8},
+      "ph_lots": 2.5,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 2.0,
+      "expected_lots_on_delay": 2
+    },
+    {
+      "name": "fractional_variance_rounds_to_nearest",
+      "description": "abs_neg_variance = 2.7 from fractional F takedown — Rule 2 returns int(round(2.7)) = 3. V3 cashflow lot columns are typically whole numbers but the contract tolerates floats.",
+      "p_lot_sums": {"mnth_A_Lots": 10},
+      "f_lot_sums": {"mnth_A_Lots": 7.3},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 2.7,
+      "expected_lots_on_delay": 3
+    },
+    {
+      "name": "all_lot_cols_empty",
+      "description": "Degenerate case — P and F both zero on every lot type. Not behind. Rule 3.",
+      "p_lot_sums": {"mnth_A_Lots": 0, "mnth_B_Lots": 0, "mnth_C_Lots": 0, "mnth_D_Lots": 0, "mnth_E_Lots": 0, "mnth_F_Lots": 0, "mnth_G_Lots": 0},
+      "f_lot_sums": {"mnth_A_Lots": 0, "mnth_B_Lots": 0, "mnth_C_Lots": 0, "mnth_D_Lots": 0, "mnth_E_Lots": 0, "mnth_F_Lots": 0, "mnth_G_Lots": 0},
+      "ph_lots": 0,
+      "expected_is_behind": false,
+      "expected_abs_neg_variance": 0.0,
+      "expected_lots_on_delay": 0
+    },
+    {
+      "name": "f_dict_missing_key_treated_as_zero",
+      "description": "P has all 7 lot types; F dict omits mnth_C_Lots entirely (absent key, not 0). Must treat missing as 0 and flag BEHIND if P_C > 0. Mirrors the emitter pandas case where a lot-type column may not be present in cf_f_valid.",
+      "p_lot_sums": {"mnth_A_Lots": 5, "mnth_B_Lots": 5, "mnth_C_Lots": 4},
+      "f_lot_sums": {"mnth_A_Lots": 5, "mnth_B_Lots": 5},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 4.0,
+      "expected_lots_on_delay": 4
+    },
+    {
+      "name": "none_values_treated_as_zero",
+      "description": "pandas sum of empty series yields NaN in some paths; callers may pre-coerce or pass None. The shared function must treat None as 0.0 to match the emitter fallback behavior.",
+      "p_lot_sums": {"mnth_A_Lots": 10, "mnth_B_Lots": null},
+      "f_lot_sums": {"mnth_A_Lots": 8, "mnth_B_Lots": null},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 2.0,
+      "expected_lots_on_delay": 2
+    },
+    {
+      "name": "behind_but_ph_lots_zero_rule_2_applies",
+      "description": "Explicit check that ph_lots == 0 routes to Rule 2, not Rule 1. Rule 1 requires ph_lots > 0 strictly.",
+      "p_lot_sums": {"mnth_A_Lots": 10},
+      "f_lot_sums": {"mnth_A_Lots": 4},
+      "ph_lots": 0,
+      "expected_is_behind": true,
+      "expected_abs_neg_variance": 6.0,
+      "expected_lots_on_delay": 6
+    }
+  ],
+
+  "invalid_cases": [
+    {
+      "name": "negative_abs_neg_variance_raises",
+      "description": "abs_neg_variance is defined as ≥ 0 (sum of absolute values of negative deltas). A negative input is a caller bug; the function raises ValueError.",
+      "is_behind": true,
+      "abs_neg_variance": -1.0,
+      "ph_lots": 0,
+      "expected_exception": "ValueError"
+    },
+    {
+      "name": "negative_ph_lots_raises",
+      "description": "qs_Plat_Hiatus.Lots is a lot count and cannot be negative. A negative here indicates a sign-convention error upstream.",
+      "is_behind": true,
+      "abs_neg_variance": 3.0,
+      "ph_lots": -2,
+      "expected_exception": "ValueError"
+    }
+  ]
+}
