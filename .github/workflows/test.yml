@@ -1,0 +1,43 @@
+name: test
+
+# EHC Federation Cohesion Plan — Phase 3.5 (2026-04-22).
+#
+# Runs pytest on every push to main and every phase-* branch, plus on
+# every pull request. No secrets required; operates entirely on
+# checked-in BMD fixtures.
+#
+# This workflow gates the shared emitter package. Every test case here
+# is expected to also pass via the Board Auditor's independent
+# implementation — the auditor carries its own parity test in
+# ehc-data-analysis/data_board_auditor/tests/test_auditor_bmd_parity.py
+# that reads the same bmd_fixtures/*.json files.
+
+on:
+  push:
+    branches:
+      - main
+      - 'phase-*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package (editable) + test deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Run pytest
+        run: |
+          python -m pytest -v

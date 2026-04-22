@@ -1,0 +1,75 @@
+{
+  "$doc": "BMD-derived input→output pairs for the Recast exclusion metric. Used by both ehc_contracts.metrics.recast.identify_recast_projects and by the Board Auditor's independent implementation in ehc-data-analysis/data_board_auditor/scripts/recalculate_metrics.py. If both pass against this file, they agree on what 'recast' means.",
+  "cases": [
+    {
+      "name": "clean_bool_mixed",
+      "description": "Typical production shape — bool column with True / False / NaN, numeric REF_IDs.",
+      "board": {
+        "REF_ID": [1001, 1002, 1003, 1004, 1005],
+        "Recast": [true, false, true, null, false],
+        "Project_Name": ["A", "B", "C", "D", "E"]
+      },
+      "expected_ids": [1001, 1003]
+    },
+    {
+      "name": "all_false",
+      "description": "No recast projects in the fund.",
+      "board": {
+        "REF_ID": [2001, 2002],
+        "Recast": [false, false]
+      },
+      "expected_ids": []
+    },
+    {
+      "name": "all_true",
+      "description": "Every project in the board is recast (edge case — degenerate fund).",
+      "board": {
+        "REF_ID": [3001, 3002],
+        "Recast": [true, true]
+      },
+      "expected_ids": [3001, 3002]
+    },
+    {
+      "name": "empty_board",
+      "description": "Board is present but has zero rows.",
+      "board": {
+        "REF_ID": [],
+        "Recast": []
+      },
+      "expected_ids": []
+    },
+    {
+      "name": "missing_recast_column",
+      "description": "Board has REF_ID but no Recast column. Safe-default: return empty set, do not error.",
+      "board": {
+        "REF_ID": [4001, 4002],
+        "Project_Name": ["X", "Y"]
+      },
+      "expected_ids": []
+    },
+    {
+      "name": "missing_ref_id_column",
+      "description": "Board has Recast but no REF_ID column (malformed). Safe-default: empty set.",
+      "board": {
+        "Recast": [true, false],
+        "Project_Name": ["X", "Y"]
+      },
+      "expected_ids": []
+    },
+    {
+      "name": "ref_id_with_nan",
+      "description": "Row with NaN REF_ID is silently dropped from the recast set.",
+      "board": {
+        "REF_ID": [5001, null, 5003],
+        "Recast": [true, true, true]
+      },
+      "expected_ids": [5001, 5003]
+    },
+    {
+      "name": "null_board",
+      "description": "Board is None (dp_JSB_Board sheet absent from V3). Safe-default: empty set.",
+      "board": null,
+      "expected_ids": []
+    }
+  ]
+}

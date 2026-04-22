@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ehc-contracts"
+version = "0.1.0"
+description = "Shared metrics, schemas, and validators for EHC Asset Management's board-package emitters. The Board Auditor does NOT import from this package — it is an independent second implementation, by design."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "EHC Asset Management"},
+]
+dependencies = [
+    "pandas>=1.5,<3",
+    "jsonschema>=4,<5",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7",
+]
+
+[tool.setuptools.packages.find]
+include = ["ehc_contracts*"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
