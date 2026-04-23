@@ -6,6 +6,23 @@ docstring. Entries in reverse chronological order.
 
 ---
 
+## 2026-04-23 — Phase 6 (EHC Federation Cohesion Plan) — docstring follow-on
+
+Phase 6 (2026-04-23): one-line docstring fix in
+`ehc_contracts/metrics/lots_on_delay.py`. The authoritative-spec pointer
+referenced the former `Project_Financials_Data_Dictionary.xlsx` "Lots
+on Delay Logic" sheet, which was deleted as part of Phase 6. The
+docstring now points to the BMD Field Registry entries LS-017 and
+SEG-003 and Calculated Values LS-c002 and SEG-c002 — the Lots on Delay
+spec has moved upstream to the BMD where it can be referenced by code.
+No code changed; no test changed; no behavior change. Federation
+decision log:
+`~/Documents/GitHub/ehc-federation/decisions/phase-6-kill-local-dictionaries.md`.
+
+Branch: `phase-6-kill-local-dictionaries`. Rollback tag: `pre-phase-6`.
+
+---
+
 ## 2026-04-22 — Phase 4.5 (EHC Federation Cohesion Plan)
 
 Added `ehc_contracts.metrics.lb_margin` — the shared Land Bank Margin

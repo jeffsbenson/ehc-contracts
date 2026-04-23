@@ -44,10 +44,13 @@ The shared functions here intentionally take no TERM parameter — the
 caller chooses which project IDs to feed in, and the choice is visible at
 each call site.
 
-Authoritative spec: EHC Business Math Dictionary (see ``ehc-data-analysis/
-context/EHC_Business_Math_Dictionary.xlsx`` → "Lots on Delay Logic" sheet
-of ``Project_Financials_Data_Dictionary.xlsx``). Fixture cases in
-``tests/bmd_fixtures/lots_on_delay_cases.json``.
+Authoritative spec: EHC Business Math Dictionary
+(``ehc-data-analysis/context/EHC_Business_Math_Dictionary.xlsx``) —
+Field Registry entries LS-017 "Lot-Type Variance (F − P)" and SEG-003
+"Lots on Delay"; Calculated Values entries LS-c002 and SEG-c002. Fixture
+cases in ``tests/bmd_fixtures/lots_on_delay_cases.json``. Migrated from
+the former Project_Financials_Data_Dictionary.xlsx "Lots on Delay Logic"
+sheet in Phase 6 (2026-04-23).
 """
 
 from __future__ import annotations
